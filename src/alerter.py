@@ -1,24 +1,34 @@
 import json
-import time
+import os
+import sys
 import threading
-import requests
+import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+import requests
 from colorama import Fore, Style, init
 
 init(autoreset=True)
 
+
 class AlertManager:
+    """Write structured alerts and optionally deliver high-severity alerts."""
+
+    VALID_SEVERITIES = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+
     def __init__(self, log_file="logs/alerts.jsonl", webhook_url=None, cooldown_seconds=10):
+        if cooldown_seconds < 0:
+            raise ValueError("cooldown_seconds must be non-negative")
         self.log_path = Path(log_file)
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self.webhook_url = webhook_url
         self.cooldown = cooldown_seconds
         self._lock = threading.Lock()
-        self._recent_alerts = {}  # Tracks (alert_type, source) -> timestamp
+        self._recent_alerts = {}
 
     def _is_rate_limited(self, alert_key):
-        now = time.time()
+        now = time.monotonic()
         last_sent = self._recent_alerts.get(alert_key, 0)
         if now - last_sent < self.cooldown:
             return True
@@ -26,40 +36,37 @@ class AlertManager:
         return False
 
     def trigger(self, module: str, severity: str, title: str, details: dict, dedup_key: str = None):
-        """
-        Triggers an alert across console, JSON log file, and optional webhook.
-        """
+        severity = severity.upper()
+        if severity not in self.VALID_SEVERITIES:
+            raise ValueError(f"Unsupported alert severity: {severity}")
+
         key = dedup_key or f"{module}:{title}"
         with self._lock:
             if self._is_rate_limited(key):
-                return
+                return False
 
-            timestamp = datetime.now(timezone.utc).isoformat()
-            alert_payload = {
-                "timestamp": timestamp,
+            payload = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "module": module,
-                "severity": severity.upper(),
+                "severity": severity,
                 "title": title,
-                "details": details
+                "details": details,
             }
+            with self.log_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
-            # 1. Write structured JSON line to disk
-            with open(self.log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(alert_payload) + "\n")
+            self._print_console(payload)
 
-            # 2. Print color-coded alert to console
-            self._print_console(alert_payload)
-
-            # 3. Send external webhook for HIGH/CRITICAL alerts
-            if self.webhook_url and severity.upper() in ("HIGH", "CRITICAL"):
-                threading.Thread(target=self._send_webhook, args=(alert_payload,), daemon=True).start()
+            if self.webhook_url and severity in {"HIGH", "CRITICAL"}:
+                threading.Thread(target=self._send_webhook, args=(payload,), daemon=True).start()
+            return True
 
     def _print_console(self, payload):
         colors = {
             "LOW": Fore.CYAN,
             "MEDIUM": Fore.YELLOW,
             "HIGH": Fore.RED,
-            "CRITICAL": Fore.MAGENTA + Style.BRIGHT
+            "CRITICAL": Fore.MAGENTA + Style.BRIGHT,
         }
         color = colors.get(payload["severity"], Fore.WHITE)
         print(
@@ -68,12 +75,14 @@ class AlertManager:
         )
 
     def _send_webhook(self, payload):
+        message = {
+            "content": f"🚨 **[{payload['severity']}] {payload['title']}**\n"
+            f"**Module:** `{payload['module']}`\n"
+            f"**Details:** ```json\n{json.dumps(payload['details'], indent=2)}\n```"
+        }
         try:
-            message = {
-                "content": f"🚨 **[{payload['severity']}] {payload['title']}**\n"
-                           f"**Module:** `{payload['module']}`\n"
-                           f"**Details:** ```json\n{json.dumps(payload['details'], indent=2)}\n```"
-            }
-            requests.post(self.webhook_url, json=message, timeout=5)
-        except Exception:
-            pass  # Never let a failed webhook crash the IDS
+            response = requests.post(self.webhook_url, json=message, timeout=5)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            # Keep notification failures visible without crashing the monitor.
+            print(f"[!] Webhook delivery failed: {exc}", file=sys.stderr)

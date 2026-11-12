@@ -9,13 +9,12 @@ from watchdog.observers import Observer
 class FileIntegrityMonitor:
     """Watch a directory and alert when files are created, changed, or removed.
 
-    This is a runtime monitor: its baseline is held in memory and is captured
-    when the monitor is constructed. For tamper-resistant baselines, store
-    signed hashes outside the monitored directory.
+    The initial SHA-256 snapshot exists only in memory. It detects changes while
+    this process runs, but is not a trusted persistent baseline across restarts.
     """
 
     def __init__(self, directory_to_watch, alerter, recursive=True):
-        self.directory = Path(directory_to_watch).resolve()
+        self.directory = Path(directory_to_watch).expanduser().resolve()
         self.directory.mkdir(parents=True, exist_ok=True)
         self.alerter = alerter
         self.recursive = recursive
@@ -44,7 +43,6 @@ class FileIntegrityMonitor:
     def _capture_snapshot(self) -> dict:
         snapshot = {}
         for path in sorted(self.directory.rglob("*")):
-            # Do not follow symlinks: they can point outside the watched tree.
             if path.is_symlink() or not path.is_file():
                 continue
             relative = self._relative_path(path)
@@ -53,7 +51,7 @@ class FileIntegrityMonitor:
             try:
                 snapshot[relative] = self._hash_file(path)
             except OSError:
-                # A file may disappear or change permissions while scanning.
+                # Files can disappear or become unreadable during a scan.
                 continue
         return snapshot
 
@@ -68,8 +66,10 @@ class FileIntegrityMonitor:
 
     def _handle_file_event(self, event_type: str, raw_path: str):
         path = Path(raw_path)
+        if path.is_symlink() or path.is_dir():
+            return
         relative = self._relative_path(path)
-        if relative is None or path.is_symlink() or path.is_dir():
+        if relative is None:
             return
 
         with self._lock:
@@ -82,8 +82,8 @@ class FileIntegrityMonitor:
 
             try:
                 current = self._hash_file(path)
-            except (OSError, PermissionError):
-                # Watchdog can report events while a file is being replaced.
+            except OSError:
+                # A file may still be in the process of being written/replaced.
                 return
 
             if previous is None:
@@ -101,7 +101,6 @@ class FileIntegrityMonitor:
         if self._observer is not None:
             raise RuntimeError("FileIntegrityMonitor is already running")
 
-        self.directory.mkdir(parents=True, exist_ok=True)
         observer = Observer()
         observer.schedule(self._event_handler, str(self.directory), recursive=self.recursive)
         observer.start()
