@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "watchdog-ids"
+version = "0.2.0"
+description = "Defensive file integrity monitoring and alerting"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "watchdog>=3.0.0",
+  "requests>=2.31.0",
+  "colorama>=0.4.6",
+]
+
+[project.optional-dependencies]
+yaml = ["PyYAML>=6.0"]
+test = ["pytest>=7.0"]
+
+[project.scripts]
+watchdog-ids = "src.cli:main"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
