@@ -10,7 +10,7 @@ from watchdog.observers import Observer
 
 try:
     from .baseline import BaselineManager
-except ImportError:  # Allows running the module from a source checkout.
+except ImportError:  # Allows source-tree execution.
     from baseline import BaselineManager
 
 
@@ -18,8 +18,18 @@ class FileIntegrityMonitor:
     """Watch a directory and alert on file changes and suspicious activity."""
 
     DEFAULT_DANGEROUS_EXTENSIONS = {
-        ".exe", ".dll", ".bat", ".cmd", ".com", ".js", ".vbs",
-        ".ps1", ".scr", ".hta", ".lnk", ".jar",
+        ".exe",
+        ".dll",
+        ".bat",
+        ".cmd",
+        ".com",
+        ".js",
+        ".vbs",
+        ".ps1",
+        ".scr",
+        ".hta",
+        ".lnk",
+        ".jar",
     }
 
     def __init__(
@@ -122,27 +132,44 @@ class FileIntegrityMonitor:
 
         changes = list(self._events)
         if len(changes) >= self.burst_threshold:
-            self._alert("CRITICAL", "Burst Activity Detected", {
-                "window_seconds": self.burst_window_seconds,
-                "event_count": len(changes),
-                "sample_paths": sorted({item[2] for item in changes})[:20],
-            }, "fim:burst")
+            self._alert(
+                "CRITICAL",
+                "Burst Activity Detected",
+                {
+                    "window_seconds": self.burst_window_seconds,
+                    "event_count": len(changes),
+                    "sample_paths": sorted({item[2] for item in changes})[:20],
+                },
+                "fim:burst",
+            )
             self._events.clear()
             return
 
-        net_count = sum(1 if item[1] == "created" else -1 if item[1] == "deleted" else 0 for item in changes)
+        net_count = sum(
+            1 if item[1] == "created" else -1 if item[1] == "deleted" else 0 for item in changes
+        )
         if abs(net_count) >= self.file_count_delta_threshold:
-            self._alert("HIGH", "Unusual File Count Change", {
-                "window_seconds": self.burst_window_seconds,
-                "net_file_count_change": net_count,
-            }, "fim:file-count-churn")
+            self._alert(
+                "HIGH",
+                "Unusual File Count Change",
+                {
+                    "window_seconds": self.burst_window_seconds,
+                    "net_file_count_change": net_count,
+                },
+                "fim:file-count-churn",
+            )
 
         extensions = {item[3] for item in changes}
         if len(extensions) >= self.extension_churn_threshold:
-            self._alert("HIGH", "Extension Churn Detected", {
-                "window_seconds": self.burst_window_seconds,
-                "extensions": sorted(extensions),
-            }, "fim:extension-churn")
+            self._alert(
+                "HIGH",
+                "Extension Churn Detected",
+                {
+                    "window_seconds": self.burst_window_seconds,
+                    "extensions": sorted(extensions),
+                },
+                "fim:extension-churn",
+            )
 
     def _handle_file_event(self, event_type, raw_path):
         path = Path(raw_path)
@@ -157,14 +184,19 @@ class FileIntegrityMonitor:
             if event_type == "deleted" or not path.exists():
                 if previous is not None:
                     self._snapshot.pop(relative, None)
-                    self._alert("HIGH", "File Deleted", {"path": relative, "previous_state": previous}, f"fim:deleted:{relative}")
+                    self._alert(
+                        "HIGH",
+                        "File Deleted",
+                        {"path": relative, "previous_state": previous},
+                        f"fim:deleted:{relative}",
+                    )
                     self._track_activity("deleted", relative)
                 return
 
             try:
                 current = self._hash_file(path)
             except OSError:
-                return  # The writer may still be replacing or writing the file.
+                return
             if previous == current:
                 return
 
@@ -183,8 +215,12 @@ class FileIntegrityMonitor:
                         self._snapshot.pop(relative, None)
                     except (OSError, ValueError) as exc:
                         details["quarantine_error"] = str(exc)
-                # Keep the event title specific for operators and existing tests.
-                self._alert("CRITICAL", f"Suspicious File {action.title()}", details, f"fim:suspicious:{relative}")
+                self._alert(
+                    "CRITICAL",
+                    f"Suspicious File {action.title()}",
+                    details,
+                    f"fim:suspicious:{relative}",
+                )
             else:
                 self._alert("HIGH", f"File {action.title()}", details, f"fim:{action}:{relative}")
             self._track_activity(action, relative)
@@ -223,7 +259,12 @@ class FileIntegrityMonitor:
         observer.schedule(self._event_handler, str(self.directory), recursive=self.recursive)
         observer.start()
         self._observer = observer
-        self._alert("LOW", "Monitoring Started", {"directory": str(self.directory), "tracked_files": len(self._snapshot)}, "fim:start")
+        self._alert(
+            "LOW",
+            "Monitoring Started",
+            {"directory": str(self.directory), "tracked_files": len(self._snapshot)},
+            "fim:start",
+        )
         return observer
 
     def stop(self):
