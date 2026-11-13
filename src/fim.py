@@ -1,5 +1,4 @@
 import hashlib
-import json
 import shutil
 import threading
 import time
@@ -184,7 +183,8 @@ class FileIntegrityMonitor:
                         self._snapshot.pop(relative, None)
                     except (OSError, ValueError) as exc:
                         details["quarantine_error"] = str(exc)
-                self._alert("CRITICAL", "Suspicious File Detected", details, f"fim:suspicious:{relative}")
+                # Keep the event title specific for operators and existing tests.
+                self._alert("CRITICAL", f"Suspicious File {action.title()}", details, f"fim:suspicious:{relative}")
             else:
                 self._alert("HIGH", f"File {action.title()}", details, f"fim:{action}:{relative}")
             self._track_activity(action, relative)
@@ -196,7 +196,6 @@ class FileIntegrityMonitor:
         if self.baseline_manager and self.baseline_path.exists():
             if self.baseline_path.is_dir():
                 raise IsADirectoryError(self.baseline_path)
-            # Existing legacy baselines are supported by BaselineManager.
             self.baseline_manager.load()
         self._alert("LOW", "Health Check Passed", {"directory": str(self.directory)}, "fim:health")
 
