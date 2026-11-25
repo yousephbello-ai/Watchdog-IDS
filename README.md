@@ -50,7 +50,13 @@ A PySide6 desktop interface is available in gui.py. It starts in light mode and 
 
 ### Windows compatibility
 
-The desktop build targets 64-bit Windows 10 version 1809 or later and Windows 11. The same Windows build is intended to run on both. Windows 10 versions earlier than 1809 and 32-bit Windows are not supported by this Qt 6 desktop build. The GitHub Actions Windows runner builds the application and runs the project's unit tests and GUI import smoke test; final confirmation still requires launching the packaged app on a real Windows 10 and Windows 11 machine.
+The desktop build targets 64-bit Windows 10 version 1809 or later and Windows 11. The same Windows build is intended to run on both. Windows 10 versions earlier than 1809 and 32-bit Windows are not supported by this Qt 6 desktop build. The GitHub Actions Windows runner builds the application and installer and runs the project's unit tests and GUI import smoke test; final confirmation still requires launching the packaged app on a real Windows 10 and Windows 11 machine.
+
+### Install on Windows
+
+Download **WatchdogIDS-Setup.exe** from the latest successful GitHub Actions run (Actions → Build Windows desktop application → Artifacts), or from the Assets section of a versioned GitHub Release. Double-click the installer and follow the prompts. The installer is per-user (no administrator permission required), installs under the current user's Local AppData Programs folder, and creates a Start Menu shortcut. You can optionally create a desktop shortcut.
+
+The portable application-folder artifact is also available for users who prefer not to install. Keep the entire extracted folder together when running it.
 
 ### Run from source
 

@@ -8,6 +8,7 @@ on:
     branches:
       - main
       - feature/desktop-gui-cross-platform
+      - feature/windows-installer
     tags:
       - "v*"
 
@@ -34,13 +35,33 @@ jobs:
         run: python -c "import gui; print('Watchdog IDS GUI import OK')"
       - name: Build Windows executable
         run: pyinstaller --noconfirm --clean --windowed --name WatchdogIDS gui.py
-      - name: Upload Windows build
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $compiler)) {
+            throw "Inno Setup compiler was not found at $compiler"
+          }
+          & $compiler /Oinstaller-output /FWatchdogIDS-Setup installer/WatchdogIDS.iss
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit code $LASTEXITCODE"
+          }
+      - name: Upload Windows application folder
         uses: actions/upload-artifact@v4
         with:
-          name: WatchdogIDS-windows-x64
+          name: WatchdogIDS-windows-x64-portable
           path: dist/WatchdogIDS/
-      - name: Publish Windows release asset
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: WatchdogIDS-windows-x64-setup
+          path: installer-output/WatchdogIDS-Setup.exe
+      - name: Publish Windows release assets
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/WatchdogIDS/WatchdogIDS.exe
+          files: |
+            installer-output/WatchdogIDS-Setup.exe
+            dist/WatchdogIDS/WatchdogIDS.exe
