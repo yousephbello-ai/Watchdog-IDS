@@ -34,7 +34,7 @@ jobs:
       - name: Smoke-test GUI imports
         run: python -c "import gui; print('Watchdog IDS GUI import OK')"
       - name: Build Windows executable
-        run: pyinstaller --noconfirm --clean --windowed --name WatchdogIDS gui.py
+        run: pyinstaller --noconfirm --clean --windowed --collect-all scapy --name WatchdogIDS gui.py
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
       - name: Build Windows installer
