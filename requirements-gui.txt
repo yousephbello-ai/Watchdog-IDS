@@ -1,1 +1,3 @@
--r requirements.txt\nPySide6>=6.6\nPyInstaller>=6.0\n
+-r requirements.txt
+PySide6>=6.8,<6.9
+PyInstaller>=6.0
