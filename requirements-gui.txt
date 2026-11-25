@@ -1,0 +1,1 @@
+-r requirements.txt\nPySide6>=6.6\nPyInstaller>=6.0\n
