@@ -22,29 +22,43 @@ class BaselineManager:
 
     def capture(self, directory: Path) -> dict:
         snapshot = {}
-        if not directory.exists():
+        root = Path(directory).resolve()
+        if not root.exists():
             return snapshot
-        for path in sorted(directory.rglob("*")):
+        for path in sorted(root.rglob("*")):
             if path.is_symlink() or not path.is_file():
                 continue
             try:
-                rel = path.resolve().relative_to(directory).as_posix()
-            except ValueError:
+                # Resolve both sides before relativizing. This is important on
+                # Windows, where path casing and junction resolution can differ.
+                rel = path.resolve().relative_to(root).as_posix()
+            except (OSError, ValueError):
                 continue
-            snapshot[rel] = self._hash_file(path)
+            try:
+                snapshot[rel] = self._hash_file(path)
+            except OSError:
+                continue
         return snapshot
 
     def save(self, directory: Path) -> dict:
         snapshot = self.capture(directory)
-        payload = {"generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(), "files": snapshot}
-        self.baseline_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        from datetime import datetime, timezone
+        payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "files": snapshot,
+        }
+        self.baseline_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+        )
         return snapshot
 
     def load(self) -> dict:
         if not self.baseline_path.exists():
             return {}
         try:
-            return json.loads(self.baseline_path.read_text(encoding="utf-8")).get("files", {})
+            return json.loads(
+                self.baseline_path.read_text(encoding="utf-8")
+            ).get("files", {})
         except (OSError, ValueError):
             return {}
 
@@ -57,4 +71,10 @@ class BaselineManager:
         for rel in sorted(set(current) & set(baseline)):
             if current[rel] != baseline[rel]:
                 changed.append(rel)
-        return {"added": added, "removed": removed, "changed": changed, "current": current, "baseline": baseline}
+        return {
+            "added": added,
+            "removed": removed,
+            "changed": changed,
+            "current": current,
+            "baseline": baseline,
+        }
