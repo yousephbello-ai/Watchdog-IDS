@@ -1,0 +1,60 @@
+name: Build desktop applications
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            asset: windows
+          - os: ubuntu-latest
+            asset: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install PySide6 PyInstaller
+      - name: Build Windows executable
+        if: runner.os == 'Windows'
+        run: pyinstaller --noconfirm --clean --windowed --name WatchdogIDS gui.py
+      - name: Build Linux executable
+        if: runner.os == 'Linux'
+        run: pyinstaller --noconfirm --clean --windowed --name WatchdogIDS gui.py
+      - name: Package Linux AppImage-compatible archive
+        if: runner.os == 'Linux'
+        run: tar -czf WatchdogIDS-linux-x86_64.tar.gz -C dist WatchdogIDS
+      - name: Upload Windows build
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: WatchdogIDS-windows
+          path: dist/WatchdogIDS/
+      - name: Upload Linux build
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: WatchdogIDS-linux
+          path: WatchdogIDS-linux-x86_64.tar.gz
+      - name: Publish release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            WatchdogIDS-linux-x86_64.tar.gz
+            dist/WatchdogIDS/WatchdogIDS.exe
