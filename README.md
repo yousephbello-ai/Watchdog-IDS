@@ -1,13 +1,14 @@
 # Watchdog IDS
 
-A small, defensive file-integrity monitoring (FIM) starter project. It watches a directory, computes SHA-256 hashes, and reports file creation, modification, and deletion as JSONL alerts.
+A defensive host-and-network monitoring starter project. Watchdog combines file-integrity monitoring (FIM) with a passive network intrusion detection module (NIDS). It watches selected directories, computes SHA-256 hashes, and inspects authorized network traffic for suspicious patterns.
 
-> **Scope and limitations:** This is a local runtime monitor, not a complete network IDS or endpoint protection product. Its initial baseline lives in process memory, so changes made while it is stopped are not detected. Use it only on directories and systems you own or are authorized to monitor. For production use, add a signed baseline stored outside the monitored host, durable service supervision, access controls, and monitoring of the alert log itself.
+> **Scope and limitations:** This is a learning-focused monitoring tool, not a complete enterprise IDS, firewall, antivirus, or endpoint protection product. Network detections are heuristic and can produce false positives or miss attacks. File baseline and alert persistence have limitations. Use it only on systems and networks you own or are authorized to monitor.
 
 ## Requirements
 
 - Python 3.9 or newer
 - Dependencies from requirements.txt
+- For the desktop network IDS: Scapy and Npcap on Windows
 
 ## Install and run
 
@@ -46,7 +47,7 @@ The tests exercise the local FIM event handling logic using temporary directorie
 
 ## Desktop GUI
 
-A PySide6 desktop interface is available in gui.py. It starts in light mode and includes a dark-mode toggle, dashboard, directory selection, monitoring controls, alert history, and log views.
+A PySide6 desktop interface is available in gui.py. It starts in light mode and includes a dark-mode toggle, dashboard, file monitoring, passive network monitoring, alert history, and log views. The NIDS can flag possible TCP/UDP port scans, ICMP sweeps, and IP-to-MAC mapping changes that may indicate ARP spoofing.
 
 ### Windows compatibility
 
@@ -73,6 +74,10 @@ If PowerShell blocks activation, run Set-ExecutionPolicy -Scope Process -Executi
 
 The GUI stores its runtime alert log, baseline, and quarantine directory under the current user's home directory in .watchdog-ids. Choose a dedicated test folder first; do not point it at your entire system.
 
+### Network monitoring on Windows
+
+Install [Npcap](https://npcap.com/#download) separately before using Network IDS. On Windows, packet capture commonly requires launching Watchdog IDS with **Run as administrator**. Start network monitoring only on a network you own or have permission to monitor. The detector passively observes packets; it does not send probes. It currently flags threshold-based TCP SYN and UDP port scans, ICMP echo sweeps, and an IP address appearing with a different MAC address (possible ARP spoofing). These are indicators, not proof of an attack. Network capture depends on Npcap and adapter permissions; this project does not yet provide packet payload inspection, signature rules, TLS decryption, automatic blocking, or guaranteed detection.
+
 ### Build on GitHub Actions
 
 This release pipeline is Windows-only and builds a 64-bit Windows application. It runs automatically for pull requests into main, pushes to main or the desktop feature branch, and version tags. You can also run it manually from Actions → Build Windows desktop application → Run workflow. The Windows artifact is a PyInstaller application folder containing WatchdogIDS.exe and its required libraries; keep the entire folder together when moving or extracting it.
@@ -81,4 +86,4 @@ For a tagged release, create and push a version tag (for example v0.3.0); the wo
 
 ### Testing safely
 
-Use a disposable folder that you own or are authorized to monitor. Start monitoring, create/edit/delete a harmless text file in that folder, and confirm the corresponding events appear in the Alerts and Activity Logs views. Watchdog IDS monitors file integrity; it does not inspect network packets or detect every exploit or intrusion.
+Use a disposable folder that you own or are authorized to monitor. Start monitoring, create/edit/delete a harmless text file in that folder, and confirm the corresponding events appear in the Alerts and Activity Logs views. Watchdog IDS can monitor file integrity and passively inspect network metadata for a limited set of suspicious patterns. It does not detect every exploit or intrusion.
