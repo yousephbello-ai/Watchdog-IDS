@@ -69,9 +69,9 @@ The GUI stores its runtime alert log, baseline, and quarantine directory under t
 
 ### Build on GitHub Actions
 
-The workflow runs automatically for pull requests into main, pushes to main or the desktop feature branch, and version tags. You can also run it manually from Actions → Build desktop applications → Run workflow. The Windows artifact is a PyInstaller application folder containing WatchdogIDS.exe and its required libraries; keep the folder together when moving or extracting it. The Linux artifact is a .tar.gz containing the PyInstaller executable, not an AppImage or .deb package.
+This release pipeline is Windows-only and builds a 64-bit Windows application. It runs automatically for pull requests into main, pushes to main or the desktop feature branch, and version tags. You can also run it manually from Actions → Build Windows desktop application → Run workflow. The Windows artifact is a PyInstaller application folder containing WatchdogIDS.exe and its required libraries; keep the entire folder together when moving or extracting it.
 
-For a tagged release, create and push a version tag (for example v0.3.0); the workflow publishes release assets.
+For a tagged release, create and push a version tag (for example v0.3.0); the workflow publishes the Windows executable.
 
 ### Testing safely
 
