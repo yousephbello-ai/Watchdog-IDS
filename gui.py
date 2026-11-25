@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 
 from src.alerter import AlertManager
 from src.fim import FileIntegrityMonitor
+from src.network_ids import NetworkIntrusionMonitor
 
 
 APP_DIR = Path.home() / ".watchdog-ids"
@@ -70,6 +71,8 @@ class WatchdogWindow(QMainWindow):
         self.setWindowTitle("Watchdog IDS")
         self.resize(1280, 820)
         self.monitor = None
+        self.network_monitor = None
+        self.network_alerter = None
         self.alerter = None
         self.watch_dir = DEFAULT_WATCH if DEFAULT_WATCH.exists() else Path.home()
         self.dark = False
@@ -98,7 +101,7 @@ class WatchdogWindow(QMainWindow):
         hint.setObjectName("navhint")
         side.addWidget(hint)
         side.addSpacing(28)
-        for label, page in [("◈  Dashboard", 0), ("▣  File Monitoring", 1), ("⚑  Alerts", 2), ("☷  Activity Logs", 3), ("⚙  Settings", 4)]:
+        for label, page in [("◈  Dashboard", 0), ("▣  File Monitoring", 1), ("⌁  Network IDS", 2), ("⚑  Alerts", 3), ("☷  Activity Logs", 4), ("⚙  Settings", 5)]:
             btn = QPushButton(label)
             btn.setObjectName("nav")
             btn.clicked.connect(lambda checked=False, p=page: self.show_page(p))
@@ -125,6 +128,7 @@ class WatchdogWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.stack.addWidget(self._dashboard_page())
         self.stack.addWidget(self._monitor_page())
+        self.stack.addWidget(self._network_page())
         self.stack.addWidget(self._alerts_page())
         self.stack.addWidget(self._logs_page())
         self.stack.addWidget(self._settings_page())
@@ -233,6 +237,76 @@ class WatchdogWindow(QMainWindow):
         layout.addStretch()
         return page
 
+
+    def _network_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        box = panel()
+        v = QVBoxLayout(box)
+        v.addWidget(QLabel("PASSIVE NETWORK INTRUSION DETECTION"))
+        self.network_info = QLabel(
+            "Watches authorized network traffic for possible TCP/UDP port scans, "
+            "ICMP sweeps and changes in IP-to-MAC address mappings (possible ARP spoofing). "
+            "Detection is heuristic and can produce false positives."
+        )
+        self.network_info.setWordWrap(True)
+        self.network_info.setObjectName("muted")
+        v.addWidget(self.network_info)
+        self.network_status = QLabel("Network monitoring is stopped.")
+        self.network_status.setStyleSheet("font-size:18px;font-weight:700;")
+        v.addWidget(self.network_status)
+        controls = QHBoxLayout()
+        self.network_start_btn = QPushButton("▶  Start network monitoring")
+        self.network_start_btn.setObjectName("primary")
+        self.network_start_btn.clicked.connect(self.start_network_monitoring)
+        self.network_stop_btn = QPushButton("■  Stop network monitoring")
+        self.network_stop_btn.setObjectName("secondary")
+        self.network_stop_btn.clicked.connect(self.stop_network_monitoring)
+        controls.addWidget(self.network_start_btn)
+        controls.addWidget(self.network_stop_btn)
+        controls.addStretch()
+        v.addLayout(controls)
+        note = QLabel(
+            "Windows requirement: install Npcap from its official website. "
+            "Packet capture may require running Watchdog IDS as Administrator. "
+            "This feature is passive; it does not scan or send packets."
+        )
+        note.setWordWrap(True)
+        note.setObjectName("muted")
+        v.addWidget(note)
+        layout.addWidget(box)
+        layout.addStretch()
+        return page
+
+    def start_network_monitoring(self):
+        if self.network_monitor:
+            return
+        try:
+            APP_DIR.mkdir(parents=True, exist_ok=True)
+            self.network_alerter = AlertManager(log_file=LOG_PATH)
+            self.network_monitor = NetworkIntrusionMonitor(self.network_alerter)
+            self.network_monitor.start()
+            self.network_status.setText("Starting packet capture…")
+            self.sidebar_status.setText("●  NETWORK IDS STARTING\\n\\nPassive capture is initializing.")
+        except Exception as exc:
+            self.network_monitor = None
+            if self.network_alerter:
+                self.network_alerter.close()
+                self.network_alerter = None
+            QMessageBox.critical(self, "Could not start network monitoring", str(exc))
+        self.refresh()
+
+    def stop_network_monitoring(self):
+        if self.network_monitor:
+            self.network_monitor.stop()
+            self.network_monitor = None
+        if self.network_alerter:
+            self.network_alerter.close()
+            self.network_alerter = None
+        if hasattr(self, "network_status"):
+            self.network_status.setText("Network monitoring is stopped.")
+        self.refresh()
+
     def _alerts_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -276,7 +350,7 @@ class WatchdogWindow(QMainWindow):
 
     def show_page(self, index):
         self.stack.setCurrentIndex(index)
-        titles = ["Security Overview", "File Monitoring", "Security Alerts", "Activity Logs", "Settings"]
+        titles = ["Security Overview", "File Monitoring", "Network IDS", "Security Alerts", "Activity Logs", "Settings"]
         self.page_title.setText(titles[index])
         for i, button in enumerate(self.nav_buttons):
             button.setProperty("active", i == index)
@@ -364,6 +438,10 @@ class WatchdogWindow(QMainWindow):
                 table.setItem(index, col, item)
 
     def refresh(self):
+        if self.network_monitor and self.network_monitor.error:
+            self.network_status.setText('Capture error: ' + self.network_monitor.error)
+        elif self.network_monitor and self.network_monitor.running:
+            self.network_status.setText('Network packet capture is active.')
         alerts = self._read_alerts()
         self.alert_metric.setText(str(len(alerts)))
         self.files_metric.setText(str(len(self.monitor._snapshot)) if self.monitor else "—")
@@ -389,6 +467,7 @@ class WatchdogWindow(QMainWindow):
             self.theme_select.blockSignals(False)
 
     def closeEvent(self, event):
+        self.stop_network_monitoring()
         self.stop_monitoring()
         event.accept()
 
