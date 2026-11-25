@@ -7,7 +7,7 @@ A small, defensive file-integrity monitoring (FIM) starter project. It watches a
 ## Requirements
 
 - Python 3.9 or newer
-- Dependencies from `requirements.txt`
+- Dependencies from requirements.txt
 
 ## Install and run
 
@@ -20,7 +20,7 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
-By default, `secure_folder/` is monitored recursively and alerts are appended to `logs/alerts.jsonl`. Stop with Ctrl+C.
+By default, secure_folder/ is monitored recursively and alerts are appended to logs/alerts.jsonl. Stop with Ctrl+C.
 
 ## Options
 
@@ -30,7 +30,7 @@ python main.py --watch ./important-files --log ./logs/fim.jsonl
 python main.py --watch ./important-files --non-recursive
 ```
 
-The `WATCHDOG_DIRECTORY` and `WATCHDOG_LOG` environment variables can set defaults. Set `WATCHDOG_WEBHOOK_URL` to enable optional Discord-compatible notifications for HIGH and CRITICAL alerts. Treat webhook URLs as secrets: do not commit them, and rotate any URL that has been exposed.
+The WATCHDOG_DIRECTORY and WATCHDOG_LOG environment variables can set defaults. Set WATCHDOG_WEBHOOK_URL to enable optional Discord-compatible notifications for HIGH and CRITICAL alerts. Treat webhook URLs as secrets: do not commit them, and rotate any URL that has been exposed.
 
 ## Alerts
 
@@ -44,25 +44,34 @@ python -m unittest discover -s tests -v
 
 The tests exercise the local FIM event handling logic using temporary directories; they do not require elevated privileges or touch system files.
 
+## Desktop GUI
 
-## Desktop GUI (preview)
+A PySide6 desktop interface is available in gui.py. It starts in light mode and includes a dark-mode toggle, dashboard, directory selection, monitoring controls, alert history, and log views.
 
-A PySide6 desktop interface is available in `gui.py`. It starts in light mode and includes a dark-mode toggle, dashboard, directory selection, monitoring controls, alert history, and log views.
+### Windows compatibility
+
+The desktop build targets 64-bit Windows 10 version 1809 or later and Windows 11. The same Windows build is intended to run on both. Windows 10 versions earlier than 1809 and 32-bit Windows are not supported by this Qt 6 desktop build. The GitHub Actions Windows runner builds the application and runs the project's unit tests and GUI import smoke test; final confirmation still requires launching the packaged app on a real Windows 10 and Windows 11 machine.
 
 ### Run from source
 
-```bash
+Use 64-bit Python 3.11, then run in PowerShell:
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements-gui.txt
 python gui.py
 ```
 
-The GUI stores its runtime alert log, baseline, and quarantine directory under the current user's home directory in `.watchdog-ids/`. Choose a dedicated test directory first; do not point it at your entire system.
+If PowerShell blocks activation, run Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass in that PowerShell window, then activate the environment again.
+
+The GUI stores its runtime alert log, baseline, and quarantine directory under the current user's home directory in .watchdog-ids. Choose a dedicated test folder first; do not point it at your entire system.
 
 ### Build on GitHub Actions
 
-Open **Actions → Build desktop applications → Run workflow** and select the `feature/desktop-gui-cross-platform` branch. The workflow builds a Windows executable folder and a Linux x86_64 executable archive. Download the matching artifact from the workflow run.
+The workflow runs automatically for pull requests into main, pushes to main or the desktop feature branch, and version tags. You can also run it manually from Actions → Build desktop applications → Run workflow. The Windows artifact is a PyInstaller application folder containing WatchdogIDS.exe and its required libraries; keep the folder together when moving or extracting it. The Linux artifact is a .tar.gz containing the PyInstaller executable, not an AppImage or .deb package.
 
-For a tagged release, create and push a version tag (for example `v0.3.0`); the workflow publishes release assets. The Linux artifact is currently a tar.gz containing the PyInstaller executable, not an AppImage or .deb package.
+For a tagged release, create and push a version tag (for example v0.3.0); the workflow publishes release assets.
 
 ### Testing safely
 
