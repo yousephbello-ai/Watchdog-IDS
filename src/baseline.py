@@ -1,5 +1,7 @@
 import hashlib
 import json
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -21,28 +23,39 @@ class BaselineManager:
         return {"sha256": digest.hexdigest(), "size": size, "mtime_ns": stat.st_mtime_ns}
 
     def capture(self, directory: Path) -> dict:
+        root = Path(directory).absolute()
         snapshot = {}
-        root = Path(directory).resolve()
         if not root.exists():
             return snapshot
+
+        try:
+            baseline_abs = self.baseline_path.absolute()
+            baseline_rel = os.path.relpath(str(baseline_abs), str(root))
+        except (OSError, ValueError):
+            baseline_rel = None
+
         for path in sorted(root.rglob("*")):
-            if path.is_symlink() or not path.is_file():
-                continue
             try:
-                # Resolve both sides before relativizing. This is important on
-                # Windows, where path casing and junction resolution can differ.
-                rel = path.resolve().relative_to(root).as_posix()
-            except (OSError, ValueError):
-                continue
-            try:
+                if path.is_symlink() or not path.is_file():
+                    continue
+                # relpath uses the host platform's path rules (including
+                # Windows drive letters and case-insensitive comparisons).
+                rel = os.path.relpath(str(path.absolute()), str(root))
+                if rel == "." or rel.startswith(".." + os.sep):
+                    continue
+                rel = Path(rel).as_posix()
+                if baseline_rel is not None and os.path.normcase(rel) == os.path.normcase(
+                    Path(baseline_rel).as_posix()
+                ):
+                    continue
                 snapshot[rel] = self._hash_file(path)
-            except OSError:
+            except (OSError, ValueError):
+                # A file may disappear or become inaccessible during a scan.
                 continue
         return snapshot
 
     def save(self, directory: Path) -> dict:
         snapshot = self.capture(directory)
-        from datetime import datetime, timezone
         payload = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "files": snapshot,
@@ -67,10 +80,10 @@ class BaselineManager:
         baseline = self.load()
         added = sorted(set(current) - set(baseline))
         removed = sorted(set(baseline) - set(current))
-        changed = []
-        for rel in sorted(set(current) & set(baseline)):
-            if current[rel] != baseline[rel]:
-                changed.append(rel)
+        changed = [
+            rel for rel in sorted(set(current) & set(baseline))
+            if current[rel] != baseline[rel]
+        ]
         return {
             "added": added,
             "removed": removed,
